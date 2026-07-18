@@ -1,0 +1,9 @@
+build/
+target/
+compiled/
+*.class
+*.log
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="scripts"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="lib" path="C:/Users/thyag/OneDrive/Desktop/IgnisEngine-main/target/ignis-engine-api.jar"/>
+	<classpathentry kind="lib" path="C:/Users/thyag/OneDrive/Desktop/IgnisEngine-main/libs/repository/com/fxutilities/FXEvents/1.0.0-SNAPSHOT/FXEvents-1.0.0-SNAPSHOT.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
