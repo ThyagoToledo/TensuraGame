@@ -14,6 +14,10 @@ O projeto combina exploracao, dialogos e cutscenes orientadas por dados, combate
 - saida semantica da caverna apos Veldora;
 - primeiro contato conversacional com os goblins na Floresta de Jura;
 - cutscene goblin em pixel art com seis poses, alpha binario e escala inteira `3x`;
+- replay deterministico da Caverna do Selo ate a floresta, com checkpoints
+  semanticos que localizam a primeira divergencia;
+- batedor goblin, anciao pre-nomeacao e lobos pre-nomeacao preparados em quatro
+  direcoes para a proxima fatia da aldeia;
 - cutscenes sem listeners duplicados apos recompilacao, com fundo cinematografico
   cobrindo o viewport e absorcao animada de Veldora;
 - arquitetura separada em `GameFlowController`, `ExplorationDirector`,
@@ -44,9 +48,25 @@ Dominio:
 mvn -q -f domain-lib/pom.xml test
 ```
 
-No checkpoint de 20/07/2026, o dominio possui `68` testes verdes. A suite
+No checkpoint de 20/07/2026, o dominio possui `78` testes verdes. A suite
 completa da IgnisEngine possui `149` testes verdes e os `6` scripts do jogo
 compilam pelo MCP.
+
+## Pipeline de sprites direcionais
+
+O extrator espera uma fonte alpha em grade `3x4`: colunas `walk A`, `idle` e
+`walk B`; linhas `down`, `left`, `right` e `up`. Ele gera frames com pivot
+centro-inferior, nearest-neighbor, paleta reduzida e uma folha de QA.
+
+Requer Python com Pillow:
+
+```powershell
+python tools/extract_directional_sheet.py `
+  --input project/assets/source/personagem_sheet_alpha.png `
+  --output-dir project/assets/sprites/npcs/personagem `
+  --prefix personagem `
+  --canvas 64
+```
 
 ## Projeto de fã
 
