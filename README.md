@@ -16,6 +16,8 @@ O projeto combina exploracao, dialogos e cutscenes orientadas por dados, combate
 - cutscene goblin em pixel art com seis poses, alpha binario e escala inteira `3x`;
 - replay deterministico da Caverna do Selo ate a floresta, com checkpoints
   semanticos que localizam a primeira divergencia;
+- modelo de campanha, documento neutro, codec e cadeia de migracao para saves
+  versionados, ainda sem escrita em disco no fluxo jogavel;
 - batedor goblin, anciao pre-nomeacao e lobos pre-nomeacao preparados em quatro
   direcoes para a proxima fatia da aldeia;
 - cutscenes sem listeners duplicados apos recompilacao, com fundo cinematografico
@@ -48,7 +50,7 @@ Dominio:
 mvn -q -f domain-lib/pom.xml test
 ```
 
-No checkpoint de 20/07/2026, o dominio possui `78` testes verdes. A suite
+No checkpoint de 20/07/2026, o dominio possui `88` testes verdes. A suite
 completa da IgnisEngine possui `149` testes verdes e os `6` scripts do jogo
 compilam pelo MCP.
 
