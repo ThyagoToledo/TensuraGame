@@ -14,6 +14,8 @@ O projeto combina exploracao, dialogos e cutscenes orientadas por dados, combate
 - saida semantica da caverna apos Veldora;
 - primeiro contato conversacional com os goblins na Floresta de Jura;
 - cutscene goblin em pixel art com seis poses, alpha binario e escala inteira `3x`;
+- cutscenes sem listeners duplicados apos recompilacao, com fundo cinematografico
+  cobrindo o viewport e absorcao animada de Veldora;
 - arquitetura separada em `GameFlowController`, `ExplorationDirector`,
   `CutsceneDirector` e `GoblinContactDirector`.
 
@@ -43,7 +45,7 @@ mvn -q -f domain-lib/pom.xml test
 ```
 
 No checkpoint de 20/07/2026, o dominio possui `68` testes verdes. A suite
-completa da IgnisEngine possui `148` testes verdes e os `6` scripts do jogo
+completa da IgnisEngine possui `149` testes verdes e os `6` scripts do jogo
 compilam pelo MCP.
 
 ## Projeto de fã
