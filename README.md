@@ -11,7 +11,11 @@ O projeto combina exploracao, dialogos e cutscenes orientadas por dados, combate
 - cutscene inicial com Grande Sabio e confirmacao manual;
 - exploracao, colisao, interacoes e galeria;
 - primeiro encontro narrativo com Veldora;
-- assets de retrato, VFX, goblins e cenas seguintes em preparacao.
+- saida semantica da caverna apos Veldora;
+- primeiro contato conversacional com os goblins na Floresta de Jura;
+- cutscene goblin em pixel art com seis poses, alpha binario e escala inteira `3x`;
+- arquitetura separada em `GameFlowController`, `ExplorationDirector`,
+  `CutsceneDirector` e `GoblinContactDirector`.
 
 ## Estrutura
 
@@ -38,7 +42,9 @@ Dominio:
 mvn -q -f domain-lib/pom.xml test
 ```
 
-No checkpoint de 18/07/2026, o dominio possui `65` testes verdes. A suite completa da IgnisEngine possui `138` testes verdes e os `3` scripts do jogo compilam pelo MCP.
+No checkpoint de 20/07/2026, o dominio possui `68` testes verdes. A suite
+completa da IgnisEngine possui `148` testes verdes e os `6` scripts do jogo
+compilam pelo MCP.
 
 ## Projeto de fã
 
