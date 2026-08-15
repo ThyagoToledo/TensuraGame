@@ -1,3 +1,6 @@
+import com.ignis.animation.AnimationIO;
+import com.ignis.animation.Animator;
+import com.ignis.animation.SpriteAnimation;
 import com.ignis.core.AssetResolver;
 import com.ignis.core.GameObject;
 import com.ignis.core.IgnisScript;
@@ -62,8 +65,8 @@ public final class GameFlowController extends IgnisScript {
     };
     private static final String GOBLIN_NPC_OBJECT = "GoblinScoutNPC";
     private static final String FOREST_SCENE_NAME = "JuraForestScene";
+    private static final String VILLAGE_SCENE_NAME = "GoblinVillageScene";
     private static final String FOREST_AREA_ID = "jura_forest_approach";
-    private static final String FOREST_ARRIVAL_PENDING = "forest_arrival_pending";
     private static final double FOREST_CAMERA_X = 320.0;
     private static final double FOREST_CAMERA_Y = 256.0;
     private static final double FOREST_CAMERA_ZOOM = 1.95;
@@ -96,6 +99,9 @@ public final class GameFlowController extends IgnisScript {
     // Sinais da persistencia de campanha (CampaignSaveDirector).
     private static final String SIGNAL_SAVE_REQUEST = "TENSURA_CAMPAIGN_SAVE_REQUEST";
     private static final String SIGNAL_LOAD_REQUEST = "TENSURA_CAMPAIGN_LOAD_REQUEST";
+    private static final String SIGNAL_NEW_GAME = "TENSURA_CAMPAIGN_NEW_GAME";
+    private static final String SIGNAL_NEW_GAME_READY =
+            "TENSURA_CAMPAIGN_NEW_GAME_READY";
     private static final String SIGNAL_SAVED = "TENSURA_CAMPAIGN_SAVED";
     private static final String SIGNAL_LOADED = "TENSURA_CAMPAIGN_LOADED";
     private static final String SIGNAL_LOAD_EMPTY = "TENSURA_CAMPAIGN_LOAD_EMPTY";
@@ -111,6 +117,7 @@ public final class GameFlowController extends IgnisScript {
     private boolean forestScene;
     private boolean sceneReadyToLoad;
     private String pendingSceneName;
+    private boolean newGamePending;
 
     private CampaignSnapshot loadedSnapshot;
     private String saveWarningMessage;
@@ -160,7 +167,8 @@ public final class GameFlowController extends IgnisScript {
         onSceneSignal(SIGNAL_REQUEST_GOBLIN_CONTACT, payload -> beginGoblinContact());
         onSceneSignal(SIGNAL_GOBLIN_CONTACT_COMPLETE, payload -> completeGoblinContact());
         onSceneSignal(SIGNAL_REQUEST_DIRE_WOLF_DUEL, payload -> beginDireWolfDuel());
-        onSceneSignal(SIGNAL_DIRE_WOLF_DUEL_COMPLETE, payload -> completeDireWolfDuel());
+        onSceneSignal(SIGNAL_DIRE_WOLF_DUEL_COMPLETE, payload ->
+                completeDireWolfDuel(payload instanceof String outcomeName ? outcomeName : ""));
         onSceneSignal(SIGNAL_DIRE_WOLF_RESOLUTION_COMPLETE, payload -> completeDireWolfResolution());
         onSceneSignal(SIGNAL_NAMING_CUTSCENE_COMPLETE, payload -> completeNamingCutscene());
 
@@ -170,6 +178,12 @@ public final class GameFlowController extends IgnisScript {
             }
         });
         onSceneSignal(SIGNAL_LOAD_EMPTY, payload -> onCampaignLoadEmpty());
+        onSceneSignal(SIGNAL_NEW_GAME_READY, payload -> {
+            if (newGamePending && payload instanceof CampaignSnapshot) {
+                newGamePending = false;
+                startAwakening();
+            }
+        });
         onSceneSignal(SIGNAL_SAVE_WARNING, payload -> {
             if (payload instanceof String warning) {
                 onCampaignSaveWarning(warning);
@@ -185,6 +199,7 @@ public final class GameFlowController extends IgnisScript {
             if (payload instanceof String failure) {
                 onCampaignSaveWarning(failure);
             }
+            newGamePending = false;
             pendingSceneName = null;
             sceneReadyToLoad = false;
         });
@@ -202,7 +217,8 @@ public final class GameFlowController extends IgnisScript {
             pendingSceneName = null;
             if (!loadScene(targetScene)) {
                 clearUI();
-                setupExplorationHud("Nao foi possivel carregar a Floresta de Jura. Tente interagir novamente.");
+                setupExplorationHud("Nao foi possivel carregar " + targetScene
+                        + ". O progresso foi salvo; tente novamente.");
                 sceneDispatcher.enqueue(SIGNAL_EXPLORATION_ACTIVATE, null);
                 state = FlowState.EXPLORATION;
                 log("GameFlowController: falha ao carregar cena " + targetScene + ".");
@@ -322,7 +338,7 @@ public final class GameFlowController extends IgnisScript {
             bootstrapForestScene(new CampaignSnapshot(
                     CampaignSnapshot.CURRENT_SCHEMA_VERSION,
                     FOREST_AREA_ID, 304.0, 58.0,
-                    Set.of("awakening_complete", "veldora_encounter_complete", FOREST_ARRIVAL_PENDING)));
+                    Set.of("awakening_complete", "veldora_encounter_complete")));
         }
     }
 
@@ -410,6 +426,23 @@ public final class GameFlowController extends IgnisScript {
     // ==================== Roteamento de modo ====================
 
     private void beginAwakening() {
+        if (state != FlowState.MENU || newGamePending) return;
+        newGamePending = true;
+        String startAreaId = mapRoot.getString("startArea");
+        JSONObject startAreaJson = findAreaJson(mapRoot, startAreaId);
+        double spawnX = startAreaJson.getDouble("spawnX");
+        double spawnY = startAreaJson.getDouble("spawnY");
+        CampaignSnapshot initialSnapshot = new CampaignSnapshot(
+                CampaignSnapshot.CURRENT_SCHEMA_VERSION,
+                startAreaId,
+                spawnX,
+                spawnY,
+                Set.of());
+        sceneDispatcher.enqueue(SIGNAL_NEW_GAME, initialSnapshot);
+        log("GameFlowController: aguardando persistencia do Novo Jogo.");
+    }
+
+    private void startAwakening() {
         if (state != FlowState.MENU) return;
         String startAreaId = mapRoot.getString("startArea");
         JSONObject startAreaJson = findAreaJson(mapRoot, startAreaId);
@@ -526,7 +559,7 @@ public final class GameFlowController extends IgnisScript {
             CampaignSnapshot pendingArrival = new CampaignSnapshot(
                     CampaignSnapshot.CURRENT_SCHEMA_VERSION,
                     FOREST_AREA_ID, 304.0, 58.0,
-                    Set.of("awakening_complete", "veldora_encounter_complete", FOREST_ARRIVAL_PENDING));
+                    Set.of("awakening_complete", "veldora_encounter_complete"));
             sceneDispatcher.enqueue(SIGNAL_SAVE_REQUEST, pendingArrival);
             log("GameFlowController: saida confirmada; salvando antes de carregar JuraForestScene.");
             return;
@@ -601,10 +634,44 @@ public final class GameFlowController extends IgnisScript {
         veldoraEncounterCompleted = true;
         goblinContactCompleted = milestones.contains("goblin_contact_complete");
         duelCompleted = milestones.contains("dire_wolf_duel_complete");
+        resolutionCompleted = milestones.contains("ranga_alliance_complete");
+        rangaNamingCompleted = milestones.contains("ranga_naming_complete");
         clearUI();
         setForestBackdropVisible(true);
         setGoblinNpcVisible(false);
 
+        // Os tres marcos do capitulo dos lobos sao checados do mais avancado para o
+        // menos avancado: cada um retoma no proprio ponto, sem inferir um pelo outro.
+        // As cutscenes de resolucao/nomeacao nao persistem estado interno (beat/linha
+        // atual) — retomar significa repeti-las do inicio, o MESMO caminho que o skip
+        // ja usa para convergir ao resultado final (contrato "mesmo finalizador").
+        if (rangaNamingCompleted) {
+            loadedSnapshot = snapshot;
+            positionForestPlayer(true);
+            setGoblinNpcVisible(true);
+            ensureRangaIdentity();
+            setupExplorationHud("Vitoria! O herdeiro Ranga foi nomeado e a matilha se uniu a Tempest.");
+            sceneDispatcher.enqueue(SIGNAL_ENTER_EXPLORATION_SNAPSHOT, snapshot);
+            state = FlowState.EXPLORATION;
+            log("GameFlowController: save retomado apos a nomeacao de Ranga.");
+            return;
+        }
+        if (resolutionCompleted) {
+            loadedSnapshot = snapshot;
+            positionForestPlayer(false);
+            sceneDispatcher.enqueue(SIGNAL_ENTER_NAMING_CUTSCENE, null);
+            state = FlowState.CUTSCENE;
+            log("GameFlowController: save retomado apos a alianca; repetindo a cutscene de nomeacao.");
+            return;
+        }
+        if (duelCompleted) {
+            loadedSnapshot = snapshot;
+            positionForestPlayer(false);
+            sceneDispatcher.enqueue(SIGNAL_ENTER_DIRE_WOLF_RESOLUTION, null);
+            state = FlowState.CUTSCENE;
+            log("GameFlowController: save retomado apos o duelo; repetindo a cutscene de resolucao.");
+            return;
+        }
         if (goblinContactCompleted) {
             CampaignSnapshot normalizedSnapshot = new CampaignSnapshot(
                     CampaignSnapshot.CURRENT_SCHEMA_VERSION,
@@ -738,8 +805,42 @@ public final class GameFlowController extends IgnisScript {
     private static final String SIGNAL_ENTER_NAMING_CUTSCENE = "TENSURA_ENTER_NAMING_CUTSCENE";
     private static final String SIGNAL_NAMING_CUTSCENE_COMPLETE = "TENSURA_NAMING_CUTSCENE_COMPLETE";
 
-    private void completeDireWolfDuel() {
+    private static final String LEADER_OBJECT_NAME = "DireWolfLeader";
+    private static final String RANGA_OBJECT_NAME = "Ranga";
+    private static final String LEADER_IDLE_SPRITE = "assets/sprites/creatures/dire_wolf_leader/dire_wolf_leader_idle_down.png";
+    private static final String LEADER_IDLE_CLIP = "dire_wolf_leader_idle";
+
+    private boolean resolutionCompleted;
+    private boolean rangaNamingCompleted;
+
+    // BattleDirector envia o nome do BattleOutcome (dominio, "VICTORY_SUBDUED",
+    // "VICTORY_SURRENDER" ou "DEFEAT") como payload — nunca inferido, sempre lido.
+    private static boolean isVictoryOutcome(String outcomeName) {
+        return "VICTORY_SUBDUED".equals(outcomeName) || "VICTORY_SURRENDER".equals(outcomeName);
+    }
+
+    private void completeDireWolfDuel(String outcomeName) {
         if (duelCompleted) return;
+        if (!isVictoryOutcome(outcomeName)) {
+            // Derrota (ou payload desconhecido): o lider NAO reaparece na cutscene de
+            // resolucao — BattleDirector.finishDuel() ja o escondeu. Sem marcar
+            // duelCompleted, o goblin permanece disponivel e o duelo pode ser
+            // retentado; nenhum marco/save e escrito porque nada avancou de fato.
+            clearUI();
+            setCaveSceneObjectsVisible(false);
+            setForestBackdropVisible(true);
+            setGoblinNpcVisible(true);
+            if (player != null) {
+                player.setVisible(true);
+                player.setOpacity(1);
+            }
+            setupExplorationHud("O lider recuou seus lobos. Prepare-se e tente novamente.");
+            state = FlowState.EXPLORATION;
+            log("GameFlowController: duelo encerrado sem vitoria (" + outcomeName
+                    + "). Retorno jogavel para nova tentativa, sem marco persistido.");
+            return;
+        }
+
         duelCompleted = true;
         clearUI();
         setCaveSceneObjectsVisible(false);
@@ -747,15 +848,35 @@ public final class GameFlowController extends IgnisScript {
         setGoblinNpcVisible(true);
         sceneDispatcher.enqueue(SIGNAL_ENTER_DIRE_WOLF_RESOLUTION, null);
         state = FlowState.CUTSCENE;
-        log("GameFlowController: duelo concluido. Iniciando cutscene de resolucao.");
+
+        CampaignSnapshot snap = new CampaignSnapshot(
+                CampaignSnapshot.CURRENT_SCHEMA_VERSION,
+                FOREST_AREA_ID, 304.0, 58.0,
+                Set.of("awakening_complete", "veldora_encounter_complete", "goblin_contact_complete",
+                        "goblin_village_route_unlocked", "dire_wolf_duel_complete"));
+        sceneDispatcher.enqueue(SIGNAL_SAVE_REQUEST, snap);
+        log("GameFlowController: duelo vencido (" + outcomeName + "). Marco dire_wolf_duel_complete salvo "
+                + "separadamente; iniciando cutscene de resolucao.");
     }
 
     private void completeDireWolfResolution() {
+        if (resolutionCompleted) return;
+        resolutionCompleted = true;
         sceneDispatcher.enqueue(SIGNAL_ENTER_NAMING_CUTSCENE, null);
-        log("GameFlowController: resolucao concluida. Iniciando cutscene de nomeacao.");
+
+        CampaignSnapshot snap = new CampaignSnapshot(
+                CampaignSnapshot.CURRENT_SCHEMA_VERSION,
+                FOREST_AREA_ID, 304.0, 58.0,
+                Set.of("awakening_complete", "veldora_encounter_complete", "goblin_contact_complete",
+                        "goblin_village_route_unlocked", "dire_wolf_duel_complete", "ranga_alliance_complete"));
+        sceneDispatcher.enqueue(SIGNAL_SAVE_REQUEST, snap);
+        log("GameFlowController: resolucao concluida. Marco ranga_alliance_complete salvo separadamente; "
+                + "iniciando cutscene de nomeacao.");
     }
 
     private void completeNamingCutscene() {
+        if (rangaNamingCompleted) return;
+        rangaNamingCompleted = true;
         if (player == null) {
             player = findObject("Rimuru");
         }
@@ -763,16 +884,74 @@ public final class GameFlowController extends IgnisScript {
             player.setVisible(true);
             player.setOpacity(1);
         }
-        setupExplorationHud("Vitoria! O herdeiro Ranga foi nomeado e a matilha se uniu a Tempest.");
-        state = FlowState.EXPLORATION;
+        ensureRangaIdentity();
+        clearUI();
+        showVillageLoadingOverlay();
+        state = FlowState.SCENE_TRANSITION;
+        pendingSceneName = VILLAGE_SCENE_NAME;
 
         CampaignSnapshot snap = new CampaignSnapshot(
                 CampaignSnapshot.CURRENT_SCHEMA_VERSION,
                 "goblin_village_pre_naming", 96.0, 256.0,
                 Set.of("awakening_complete", "veldora_encounter_complete", "goblin_contact_complete", "goblin_village_route_unlocked", "dire_wolf_duel_complete", "ranga_alliance_complete", "ranga_naming_complete"));
-        sceneDispatcher.enqueue(SIGNAL_ENTER_EXPLORATION_SNAPSHOT, snap);
         sceneDispatcher.enqueue(SIGNAL_SAVE_REQUEST, snap);
-        log("GameFlowController: cutscene de nomeacao concluida. Aldeia Goblin destravada e salva com sucesso.");
+        log("GameFlowController: nomeacao concluida; salvando antes de carregar GoblinVillageScene.");
+    }
+
+    private void showVillageLoadingOverlay() {
+        double width = Math.max(480, getGame().getWidth());
+        double height = Math.max(360, getGame().getHeight());
+        transitionPanel = createPanel(0, 0, width, height);
+        setUIColors(transitionPanel, new Color(3, 11, 14, 245), null, null);
+        transitionLabel = createLabel("Seguindo para a Aldeia Goblin...", 0, 0, 520, 42);
+        transitionLabel.setAlignment(UILabel.Alignment.CENTER);
+        transitionLabel.setFont("SansSerif", Font.BOLD, 20);
+        transitionLabel.setTextColor(new Color(215, 244, 198));
+        transitionLabel.setPosition((width - 520) / 2.0, (height - 42) / 2.0);
+    }
+
+    /**
+     * Identidade distinta pos-nomeacao (P1, entrega 4): renomeia o MESMO ator
+     * {@code DireWolfLeader} para {@code Ranga} — nunca cria um segundo objeto — e
+     * garante que ele volte a pose de repouso. Necessario mesmo quando a cutscene
+     * termina por skip: nesse caso o beat final ("village_route_ready", que reseta a
+     * pose via DireWolfResolutionDirector) pode nunca ser visitado, deixando o ator
+     * congelado no ultimo quadro de "alianca" — o Animator compartilhado sobrescreve
+     * qualquer setSpritePath direto a cada frame, entao o reset precisa passar por
+     * ele tambem, nao so trocar o sprite.
+     */
+    private void ensureRangaIdentity() {
+        GameObject actor = findObject(RANGA_OBJECT_NAME);
+        if (actor == null) {
+            actor = findObject(LEADER_OBJECT_NAME);
+            if (actor == null) return; // ator ainda nao existe nesta sessao/cena
+            actor.setName(RANGA_OBJECT_NAME);
+            log("GameFlowController: " + LEADER_OBJECT_NAME + " renomeado para " + RANGA_OBJECT_NAME
+                    + " (identidade distinta pos-nomeacao).");
+        }
+        actor.setVisible(true);
+        actor.setOpacity(1);
+        actor.setSpritePath(LEADER_IDLE_SPRITE);
+        Animator animator = actor.getOrCreateAnimator();
+        SpriteAnimation idle = loadClip(LEADER_IDLE_CLIP);
+        if (idle != null) {
+            animator.addAnimation(idle);
+            animator.play(idle.getName());
+        }
+        if (player != null) {
+            actor.setX(player.getX() + 40);
+            actor.setY(player.getY());
+        }
+    }
+
+    private SpriteAnimation loadClip(String clipName) {
+        File file = AssetResolver.resolve("assets/animations/" + clipName + ".anim.json");
+        if (file == null || !file.exists()) return null;
+        try {
+            return AnimationIO.load(file);
+        } catch (Exception exception) {
+            return null;
+        }
     }
 
     // ==================== Dados (sem paths no dominio; a leitura fica aqui) ====================
